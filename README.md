@@ -7,6 +7,8 @@ up before it's lost, and the **owner** (you) gets the retrieval link on
 your own recovery email. Nothing is ever hidden from the actual owner —
 only from whoever doesn't have the password.
 
+**Live Link:** https://blackvault-jm1q.onrender.com
+
 ## 1. Install dependencies
 
 ```bash
