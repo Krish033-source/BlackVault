@@ -1,0 +1,9 @@
+.env
+venv/
+__pycache__/
+*.pyc
+vault_data/
+honeypot_files/
+blackvault_logs.db
+config.json
+otp_state.json
