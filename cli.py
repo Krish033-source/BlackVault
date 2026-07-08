@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 BlackVault CLI -- talk to your running BlackVault server (python main.py)
 from the command line instead of the browser.
@@ -19,7 +18,7 @@ import os
 import sys
 import requests
 
-BASE_URL = os.getenv("BLACKVAULT_URL", "http://localhost:5000")
+BASE_URL = https://blackvault-jm1q.onrender.com/
 
 
 def pretty(resp):
