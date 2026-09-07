@@ -4,7 +4,8 @@ from flask_mail import Mail, Message
 from cryptography.fernet import Fernet, InvalidToken
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
-import os, json, time, uuid, sqlite3, hashlib, base64, requests, io, random
+from datetime import datetime
+import os, json, time, uuid, sqlite3, hashlib, base64, requests, io, secrets, hmac
 
 load_dotenv()
 
@@ -35,6 +36,11 @@ os.makedirs(HONEYPOT_DIR, exist_ok=True)
 HONEYPOT_AFTER_ATTEMPTS = 2
 MIGRATE_THREAT_SCORE = 60
 OTP_VALID_SECONDS = 300  # 5 minutes
+
+# Legacy fixed salt -- kept ONLY so vaults created before this fix can still
+# be decrypted. Every vault locked from now on gets its own random salt
+# (see api_lock / get_vault_salt below).
+LEGACY_SALT = b"blackvault_salt_v1"
 
 # =========================================================
 # DB / config helpers
@@ -73,8 +79,13 @@ def load_config():
     return base
 
 def save_config(cfg):
+    # Never persist the GitHub token to disk if it's already available via
+    # env -- keep it env-sourced only, so it doesn't sit in plaintext json.
+    to_write = dict(cfg)
+    if os.getenv("GITHUB_TOKEN"):
+        to_write["github_token"] = ""
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, indent=2)
+        json.dump(to_write, f, indent=2)
 
 def sha256_text(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -100,20 +111,87 @@ def log_event(event, details="", ip=None):
         conn.commit()
 
 # =========================================================
+# Audit log -> human friendly view
+# =========================================================
+LOG_TEMPLATES = {
+    "setup":                     "Vault system was set up for the first time",
+    "otp_sent":                  "OTP code was emailed to {details}",
+    "otp_request_bad_password":  "Someone requested an OTP but typed the wrong master password",
+    "otp_email_failed":          "Tried to email an OTP but it failed ({details})",
+    "encrypt":                   "A file was locked (encrypted) -> {details}",
+    "bad_password_on_lock":      "Wrong master password used while locking a file ({details})",
+    "bad_otp_on_lock":           "Wrong/expired OTP used while locking a file ({details})",
+    "bad_password_on_unlock":    "Wrong password attempt while trying to unlock a vault ({details})",
+    "bad_password_on_download":  "Wrong password attempt while trying to download a file ({details})",
+    "bad_password_on_delete":    "Wrong password attempt while trying to delete a vault ({details})",
+    "honeypot_served":           "A fake decoy file was served to a suspicious user ({details})",
+    "auto_migrate":              "Real file was auto-backed up to GitHub after repeated attacks ({details})",
+    "migrate_failed":            "Tried to auto-backup the file but it failed ({details})",
+    "email_failed":              "Tried to send a security alert email but it failed ({details})",
+    "unlock_success":            "Vault was unlocked successfully ({details})",
+    "owner_delete":              "Owner deleted a vault on purpose ({details})",
+}
+
+def humanize_log_row(row):
+    ts, event, details, ip, prev_hash, curr_hash = row
+    try:
+        when = datetime.fromtimestamp(ts).strftime("%d %b %Y, %I:%M %p")
+    except Exception:
+        when = str(ts)
+    template = LOG_TEMPLATES.get(event, "{event}: {details}")
+    try:
+        message = template.format(details=details, event=event)
+    except Exception:
+        message = f"{event}: {details}"
+    return {
+        "when": when,
+        "message": message,
+        "ip": ip,
+        "event": event,
+        "hash_short": curr_hash[:10]
+    }
+
+def verify_log_chain_intact():
+    """Walks the hash chain oldest-to-newest and confirms nothing was tampered with."""
+    init_db()
+    with sqlite3.connect(LOG_DB) as conn:
+        rows = conn.execute(
+            "SELECT ts, event, details, ip, prev_hash, curr_hash FROM logs ORDER BY id ASC"
+        ).fetchall()
+    prev = "GENESIS"
+    for ts, event, details, ip, prev_hash, curr_hash in rows:
+        if prev_hash != prev:
+            return False
+        payload = f"{ts}|{event}|{details}|{ip}|{prev_hash}"
+        if sha256_text(payload) != curr_hash:
+            return False
+        prev = curr_hash
+    return True
+
+# =========================================================
 # Crypto helpers
 # =========================================================
-def derive_key(password, salt=b"blackvault_salt_v1"):
+def derive_key(password, salt):
     return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 200000, dklen=32)
 
-def fernet_key(password):
-    raw = hashlib.sha256(derive_key(password)).digest()
+def fernet_key(password, salt):
+    raw = hashlib.sha256(derive_key(password, salt)).digest()
     return base64.urlsafe_b64encode(raw)
 
-def encrypt_bytes(data, password):
-    return Fernet(fernet_key(password)).encrypt(data)
+def encrypt_bytes(data, password, salt):
+    return Fernet(fernet_key(password, salt)).encrypt(data)
 
-def decrypt_bytes(data, password):
-    return Fernet(fernet_key(password)).decrypt(data)
+def decrypt_bytes(data, password, salt):
+    return Fernet(fernet_key(password, salt)).decrypt(data)
+
+def get_vault_salt(meta):
+    """Every vault locked after this fix carries its own random salt in meta.
+    Older vaults (locked before the fix) fall back to the old shared salt
+    so they still decrypt correctly."""
+    s = meta.get("salt")
+    if s:
+        return bytes.fromhex(s)
+    return LEGACY_SALT
 
 # =========================================================
 # Vault metadata
@@ -201,7 +279,11 @@ def init_master(password, email):
 
 def verify_master(password):
     cfg = load_config()
-    return bool(cfg["master_password_hash"]) and sha256_text(password) == cfg["master_password_hash"]
+    if not cfg["master_password_hash"]:
+        return False
+    # Timing-safe comparison -- plain '==' on hashes can leak timing info
+    # that helps an attacker guess the password byte-by-byte.
+    return hmac.compare_digest(sha256_text(password), cfg["master_password_hash"])
 
 # =========================================================
 # REAL OTP -- generated fresh, emailed, single-use, expires
@@ -217,7 +299,9 @@ def load_otp_state():
         return json.load(f)
 
 def generate_and_send_otp(to_email):
-    otp = f"{random.randint(0, 999999):06d}"
+    # secrets.randbelow is CSPRNG-backed; random.randint is NOT and is
+    # predictable enough to matter for something guarding real files.
+    otp = f"{secrets.randbelow(1000000):06d}"
     state = {"otp_hash": sha256_text(otp), "expires_at": int(time.time()) + OTP_VALID_SECONDS, "used": False}
     save_otp_state(state)
     body = f"Your BlackVault OTP is: {otp}\nIt expires in {OTP_VALID_SECONDS // 60} minutes and can be used once."
@@ -232,7 +316,7 @@ def verify_and_consume_otp(otp):
         return False, "otp_already_used"
     if int(time.time()) > state.get("expires_at", 0):
         return False, "otp_expired"
-    if sha256_text(otp) != state.get("otp_hash"):
+    if not hmac.compare_digest(sha256_text(otp), state.get("otp_hash", "")):
         return False, "otp_incorrect"
     state["used"] = True
     save_otp_state(state)
@@ -242,7 +326,7 @@ def verify_and_consume_otp(otp):
 # Real, testable backup backend: GitHub Gist (secret gist)
 # =========================================================
 def upload_to_backup(file_path, vault_id):
-    token = load_config().get("github_token", "")
+    token = load_config().get("github_token", "") or os.getenv("GITHUB_TOKEN", "")
     if not token:
         return None, "github_token_not_set"
 
@@ -272,7 +356,7 @@ def upload_to_backup(file_path, vault_id):
     return {"html_url": html_url, "raw_url": raw_url}, None
 
 def download_from_backup(raw_url):
-    token = load_config().get("github_token", "")
+    token = load_config().get("github_token", "") or os.getenv("GITHUB_TOKEN", "")
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     r = requests.get(raw_url, headers=headers, timeout=60)
     r.raise_for_status()
@@ -432,7 +516,11 @@ def api_lock():
     enc_path = data_path(vault_id)
     raw = file.read()
     original_hash = compute_file_hash(raw)
-    enc = encrypt_bytes(raw, password)
+
+    # Fresh random salt per vault -- so the same password never derives the
+    # same encryption key twice across different vaults.
+    salt = os.urandom(16)
+    enc = encrypt_bytes(raw, password, salt)
     with open(enc_path, "wb") as f:
         f.write(enc)
 
@@ -448,7 +536,8 @@ def api_lock():
         "last_attempt_ip": "",
         "threat_score": 0,
         "state": "locked",
-        "original_sha256": original_hash
+        "original_sha256": original_hash,
+        "salt": salt.hex()
     }
     save_meta(vault_id, meta)
     log_event("encrypt", f"{file.filename} -> {vault_id} sha256={original_hash[:16]}...", ip=ip)
@@ -524,10 +613,12 @@ def api_unlock():
     save_meta(vault_id, meta)
     log_event("unlock_success", vault_id, ip=ip)
 
+    salt = get_vault_salt(meta)
+
     if meta.get("migrated"):
         try:
             enc = download_from_backup(meta["migration_raw_url"])
-            dec = decrypt_bytes(enc, password)
+            dec = decrypt_bytes(enc, password, salt)
             integrity_ok = compute_file_hash(dec) == meta.get("original_sha256")
             return jsonify({
                 "ok": True, "migrated": True,
@@ -548,7 +639,7 @@ def api_unlock():
         return jsonify({"ok": False, "reason": "data_missing"}), 404
 
     with open(path, "rb") as f:
-        dec = decrypt_bytes(f.read(), password)
+        dec = decrypt_bytes(f.read(), password, salt)
     integrity_ok = compute_file_hash(dec) == meta.get("original_sha256")
     return jsonify({
         "ok": True, "migrated": False,
@@ -567,16 +658,28 @@ def api_download_decrypted(vault_id):
     if not meta:
         return jsonify({"ok": False, "reason": "vault_not_found"}), 404
     if not verify_master(password):
-        handle_wrong_attempt(meta, vault_id, "download")
-        return jsonify({"ok": False, "reason": "bad_password"}), 403
+        r = handle_wrong_attempt(meta, vault_id, "download")
+        resp = {
+            "ok": False, "reason": "bad_password",
+            "attempts": meta["failed_attempts"], "threat_score": r["score"]
+        }
+        # BUG FIX: this branch used to silently discard the honeypot info
+        # that handle_wrong_attempt() already generated. Now it's actually
+        # returned to the caller, same as /api/unlock and /api/delete_attempt do.
+        if r["show_honeypot"]:
+            resp["honeypot"] = True
+            resp["honeypot_download_url"] = f"/api/download_honeypot/{r['honeypot_token']}"
+            resp["honeypot_filename"] = r["honeypot_filename"]
+        return jsonify(resp), 403
 
     try:
+        salt = get_vault_salt(meta)
         if meta.get("migrated"):
             enc = download_from_backup(meta["migration_raw_url"])
         else:
             with open(data_path(vault_id), "rb") as f:
                 enc = f.read()
-        dec = decrypt_bytes(enc, password)
+        dec = decrypt_bytes(enc, password, salt)
     except Exception as e:
         return jsonify({"ok": False, "reason": "decrypt_failed", "detail": str(e)}), 500
 
@@ -616,23 +719,47 @@ def api_delete_attempt():
     log_event("owner_delete", vault_id, ip=ip)
     return jsonify({"ok": True, "message": "vault_deleted_by_owner"})
 
-@app.route("/api/status", methods=["GET"])
+@app.route("/api/status", methods=["POST"])
 def api_status():
+    """
+    Now password-protected (was fully open before -- anyone could see every
+    vault's metadata + full audit log with no auth at all).
+    Frontend must send {"password": "..."} in the JSON body.
+    Logs come back in a human-readable form, plus a tamper_check flag that
+    tells you if the hash-chained log has been altered.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    password = data.get("password", "").strip()
+    if not verify_master(password):
+        return jsonify({"ok": False, "reason": "bad_password"}), 401
+
     init_db()
     vaults = []
     for file in os.listdir(DATA_DIR):
         if file.endswith(".json"):
             try:
                 with open(os.path.join(DATA_DIR, file), "r", encoding="utf-8") as f:
-                    vaults.append(json.load(f))
+                    vault_meta = json.load(f)
+                    vault_meta.pop("salt", None)  # don't expose crypto material
+                    vaults.append(vault_meta)
             except Exception:
                 pass
-    logs = []
+
     with sqlite3.connect(LOG_DB) as conn:
-        rows = conn.execute("SELECT ts, event, details, ip, prev_hash, curr_hash FROM logs ORDER BY id DESC LIMIT 50").fetchall()
-        for r in rows:
-            logs.append({"ts": r[0], "event": r[1], "details": r[2], "ip": r[3], "prev_hash": r[4], "curr_hash": r[5]})
-    return jsonify({"ok": True, "vaults": vaults, "logs": logs})
+        rows = conn.execute(
+            "SELECT ts, event, details, ip, prev_hash, curr_hash FROM logs ORDER BY id DESC LIMIT 50"
+        ).fetchall()
+
+    human_logs = [humanize_log_row(r) for r in rows]
+    tamper_check_ok = verify_log_chain_intact()
+
+    return jsonify({
+        "ok": True,
+        "vaults": vaults,
+        "logs": human_logs,
+        "tamper_check": "OK - log history is intact" if tamper_check_ok else "FAILED - log history looks tampered with!",
+        "tamper_check_ok": tamper_check_ok
+    })
 
 @app.route("/api/test_email", methods=["POST"])
 def api_test_email():
