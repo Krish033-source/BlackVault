@@ -1,9 +1,9 @@
-// ============================================================
+
 // BlackVault Terminal Mode
 // A REPL in the browser. Reuses helpers already defined in ui.js
 // (requestJson, toast, show, refreshStatus, downloadDecrypted) so
 // there is exactly ONE place that talks to each API endpoint.
-// ============================================================
+
 
 const termOutput = document.getElementById("termOutput");
 const termInput = document.getElementById("termInput");
@@ -88,7 +88,6 @@ async function handleCommand(raw) {
   const cmd = (parts[0] || "").toLowerCase();
   const arg = parts[1];
 
-  termInput.disabled = true;
   try {
     switch (cmd) {
       case "help": printHelp(); break;
@@ -111,7 +110,6 @@ async function handleCommand(raw) {
   } catch (e) {
     printLine(`Error: ${e}`, "err");
   } finally {
-    termInput.disabled = false;
     termInput.focus();
   }
 }
@@ -228,9 +226,6 @@ async function cmdTestEmail() {
   else printLine(`Email failed: ${data.detail || data.reason}`, "err");
 }
 
-// ============================================================
-// GUI <-> Terminal toggle
-// ============================================================
 const guiPanel = document.getElementById("guiPanel");
 const terminalPanel = document.getElementById("terminalPanel");
 const modeGuiBtn = document.getElementById("modeGuiBtn");
