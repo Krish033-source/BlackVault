@@ -44,9 +44,6 @@ function printHelp() {
   lines.forEach(l => printLine(l, "info"));
 }
 
-// Ask a question and wait for the next Enter press. `masked=true` switches
-// the input to type=password for that single answer (like getpass in the
-// real cli.py), then reverts back to a normal command prompt.
 function termAsk(promptText, masked = false) {
   return new Promise(resolve => {
     termPromptLabel.textContent = promptText;
@@ -252,7 +249,6 @@ function setMode(mode) {
 modeGuiBtn.onclick = () => setMode("gui");
 modeTermBtn.onclick = () => setMode("terminal");
 
-// Restore last-used mode (defaults to GUI on first-ever visit).
 let savedMode = "gui";
 try { savedMode = localStorage.getItem("blackvault_mode") || "gui"; } catch (e) {}
 setMode(savedMode);
