@@ -11,11 +11,7 @@ only from whoever doesn't have the password.
 
 # BlackVault — Full Documentation
 
-This document explains what every file does, what each endpoint does, and
-the exact mechanism behind every feature — so you can explain it
-confidently to hackathon judges.
-
----
+-----
 
 ## 1. Project structure
 
