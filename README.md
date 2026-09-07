@@ -1,4 +1,4 @@
-# BlackVault — Setup & Run Guide
+# BlackVault 
 
 Encrypted file vault with password + OTP (MFA), automatic threat scoring,
 and delete-attempt protection: if someone tries to wipe/delete a vault
