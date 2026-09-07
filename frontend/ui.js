@@ -50,7 +50,8 @@ async function setupVault() {
   const { data } = await requestJson("/api/setup", { method: "POST", body: JSON.stringify({ password, email }) });
   show("responseBox", data);
   toast(data.ok ? "Vault initialized" : `Setup failed: ${data.reason}`, !data.ok);
-  refreshStatus();
+
+  if (data.ok) refreshStatus(password);
 }
 
 async function testEmail() {
@@ -76,9 +77,10 @@ async function lockFile() {
     return;
   }
 
+  const password = document.getElementById("password").value.trim();
   const fd = new FormData();
   fd.append("file", file);
-  fd.append("password", document.getElementById("password").value.trim());
+  fd.append("password", password);
   fd.append("otp", document.getElementById("otp").value.trim());
 
   const { data } = await requestJson("/api/lock", { method: "POST", body: fd });
@@ -95,7 +97,7 @@ async function lockFile() {
   } else {
     toast(`Lock failed: ${data.detail || data.reason}`, true);
   }
-  refreshStatus();
+  refreshStatus(password);
 }
 
 async function unlockVault() {
@@ -124,7 +126,8 @@ async function unlockVault() {
   } else if (!data.ok) {
     toast(`Unlock rejected (attempt #${data.attempts || "?"}, threat score ${data.threat_score ?? "?"})`, true);
   }
-  refreshStatus();
+
+  if (data.ok) refreshStatus(password);
 }
 
 async function downloadDecrypted(vault_id, password) {
@@ -136,6 +139,15 @@ async function downloadDecrypted(vault_id, password) {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     toast(`Download failed: ${err.detail || err.reason || res.status}`, true);
+    // NEW: backend now returns honeypot info here too on wrong password.
+    if (err.honeypot) {
+      const box = document.getElementById("decryptedLinkBox");
+      const a = document.createElement("a");
+      a.href = err.honeypot_download_url;
+      a.className = "dl-link honeypot";
+      a.textContent = `⬇ Download Decoy File (${err.honeypot_filename})`;
+      box.appendChild(a);
+    }
     return;
   }
   const disposition = res.headers.get("Content-Disposition") || "";
@@ -169,12 +181,25 @@ async function deleteAttempt() {
   } else {
     toast(`Delete attempt error: ${data.reason}`, true);
   }
-  refreshStatus();
+  refreshStatus(password);
 }
 
-async function refreshStatus() {
-  const { data } = await requestJson("/api/status", { method: "GET" });
+async function refreshStatus(password) {
+  if (!password) {
+    show("statusBox", { ok: false, reason: "enter_master_password_to_view_status" });
+    return;
+  }
+  const { data } = await requestJson("/api/status", { method: "POST", body: JSON.stringify({ password }) });
   show("statusBox", data);
+  if (data.ok === false && data.reason === "bad_password") {
+    toast("Wrong password -- can't load status", true);
+  }
+}
+
+function viewStatus() {
+  const input = document.getElementById("statusPassword");
+  const password = input ? input.value.trim() : "";
+  refreshStatus(password);
 }
 
 document.getElementById("btnSetup").onclick = withLoading(document.getElementById("btnSetup"), setupVault);
@@ -184,4 +209,5 @@ document.getElementById("btnLock").onclick = withLoading(document.getElementById
 document.getElementById("btnUnlock").onclick = withLoading(document.getElementById("btnUnlock"), unlockVault);
 document.getElementById("btnDelete").onclick = withLoading(document.getElementById("btnDelete"), deleteAttempt);
 
-refreshStatus();
+const btnStatus = document.getElementById("btnStatus");
+if (btnStatus) btnStatus.onclick = withLoading(btnStatus, viewStatus);
