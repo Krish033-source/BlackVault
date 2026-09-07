@@ -4,97 +4,243 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BlackVault</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <style>
-    :root{--bg:#0b1020;--card:#121a33;--border:#243055;--accent:#4f7cff;--good:#22c98f;--bad:#ff4f6f;--muted:#9db0ff}
+    :root{
+      --bg:#020603;
+      --bg-panel:#04140a;
+      --border:#0f4a24;
+      --border-bright:#1aff6e;
+      --green:#22ff77;
+      --green-dim:#0fbf56;
+      --green-glow:rgba(34,255,119,0.35);
+      --red:#ff3b5c;
+      --amber:#ffb347;
+      --muted:#4f9a6b;
+      --font-mono:'JetBrains Mono','Share Tech Mono',ui-monospace,Consolas,monospace;
+    }
     *{box-sizing:border-box}
-    body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:#e8ecff}
-    .layout{display:grid;grid-template-columns:1.3fr 0.9fr;gap:16px;max-width:1300px;margin:0 auto;padding:20px;align-items:start}
+    body{
+      margin:0;
+      font-family:var(--font-mono);
+      background:
+        radial-gradient(ellipse at top, #05170c 0%, #020603 60%);
+      color:var(--green);
+      min-height:100vh;
+    }
+    body::before{
+      content:"";
+      position:fixed;inset:0;
+      background:repeating-linear-gradient(0deg, rgba(0,255,100,0.025) 0px, rgba(0,255,100,0.025) 1px, transparent 1px, transparent 3px);
+      pointer-events:none;
+      z-index:1;
+    }
+    .topbar{
+      display:flex;align-items:center;justify-content:space-between;
+      max-width:1300px;margin:0 auto;padding:18px 20px 0 20px;
+      position:relative;z-index:2;
+      flex-wrap:wrap;gap:12px;
+    }
+    .brand h1{
+      margin:0;font-size:22px;letter-spacing:2px;
+      text-shadow:0 0 8px var(--green-glow);
+    }
+    .brand .subtitle{color:var(--muted);font-size:12px;margin-top:4px;max-width:560px}
+    .mode-toggle{
+      display:flex;border:1px solid var(--border-bright);border-radius:999px;
+      overflow:hidden;background:#01130a;
+    }
+    .mode-toggle button{
+      appearance:none;border:none;background:transparent;color:var(--muted);
+      font-family:var(--font-mono);font-weight:700;font-size:12px;letter-spacing:1px;
+      padding:10px 18px;cursor:pointer;transition:all .15s ease;
+    }
+    .mode-toggle button.active{
+      background:var(--green);color:#02150a;
+      box-shadow:0 0 14px var(--green-glow) inset;
+    }
+    .layout{
+      display:grid;grid-template-columns:1.3fr 0.9fr;gap:16px;
+      max-width:1300px;margin:0 auto;padding:20px;align-items:start;
+      position:relative;z-index:2;
+    }
     .col-actions{display:flex;flex-direction:column;gap:16px}
     .col-status{position:sticky;top:20px}
-    h1{margin:0 0 4px 0}
-    .subtitle{color:var(--muted);font-size:14px;margin-bottom:16px}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
-    input,button{width:100%;box-sizing:border-box;padding:10px 12px;margin:6px 0;border-radius:10px;border:1px solid #33406b;background:#0f1630;color:#fff;font-size:14px}
-    button{cursor:pointer;background:var(--accent);border:none;font-weight:700}
-    button:disabled{opacity:0.5;cursor:not-allowed}
-    button.danger{background:var(--bad)}
-    button.secondary{background:#2a3763}
-    a.dl-link{display:block;text-align:center;text-decoration:none;padding:10px 12px;margin:6px 0;border-radius:10px;background:var(--good);color:#04241a;font-weight:700}
-    a.dl-link.honeypot{background:#ffb347;color:#3a1f00}
-    pre{margin:0;white-space:pre-wrap;background:#0a0f1f;padding:12px;border-radius:10px;overflow:auto;font-size:12px;max-height:340px}
-    .muted{color:var(--muted);font-size:13px}
-    .step{font-size:11px;color:#6f80c4;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px 0}
-    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;margin-left:6px}
-    .badge.good{background:#0c3b2c;color:var(--good)}
-    .badge.bad{background:#3b0c17;color:var(--bad)}
-    #toast{position:fixed;bottom:20px;right:20px;background:#1a2450;border:1px solid var(--accent);padding:12px 18px;border-radius:10px;display:none;max-width:320px;z-index:999}
-    @media (max-width:900px){.layout{grid-template-columns:1fr}.col-status{position:static}}
+    .card{
+      background:var(--bg-panel);border:1px solid var(--border);border-radius:10px;
+      padding:16px;box-shadow:0 0 0 1px rgba(0,0,0,0.3), 0 0 24px rgba(0,255,120,0.04);
+    }
+    .card:hover{border-color:var(--border-bright)}
+    input,button{
+      width:100%;box-sizing:border-box;padding:11px 12px;margin:6px 0;border-radius:6px;
+      border:1px solid var(--border);background:#010c05;color:var(--green);
+      font-size:13px;font-family:var(--font-mono);
+    }
+    input::placeholder{color:#2c6b45}
+    input:focus{outline:none;border-color:var(--border-bright);box-shadow:0 0 0 2px var(--green-glow)}
+    button{
+      cursor:pointer;background:var(--green);color:#02150a;border:none;font-weight:700;
+      letter-spacing:0.5px;text-transform:uppercase;font-size:12px;
+      transition:transform .1s ease, box-shadow .15s ease;
+    }
+    button:hover{box-shadow:0 0 16px var(--green-glow)}
+    button:active{transform:scale(0.98)}
+    button:disabled{opacity:0.4;cursor:not-allowed;box-shadow:none}
+    button.danger{background:var(--red);color:#2a0009}
+    button.secondary{background:transparent;color:var(--green);border:1px solid var(--border-bright)}
+    a.dl-link{
+      display:block;text-align:center;text-decoration:none;padding:11px 12px;margin:6px 0;
+      border-radius:6px;background:var(--green);color:#02150a;font-weight:700;
+      text-transform:uppercase;font-size:12px;letter-spacing:0.5px;
+    }
+    a.dl-link.honeypot{background:var(--amber);color:#3a1f00}
+    pre{
+      margin:0;white-space:pre-wrap;background:#010c05;border:1px solid var(--border);
+      padding:12px;border-radius:6px;overflow:auto;font-size:12px;max-height:340px;color:var(--green-dim);
+    }
+    .muted{color:var(--muted);font-size:12px;line-height:1.5}
+    .step{font-size:11px;color:var(--green-dim);text-transform:uppercase;letter-spacing:2px;margin:0 0 6px 0}
+    .step::before{content:"// "}
+    h3{margin-top:0;text-shadow:0 0 6px var(--green-glow)}
+    #toast{
+      position:fixed;bottom:20px;right:20px;background:#01130a;border:1px solid var(--border-bright);
+      color:var(--green);padding:12px 18px;border-radius:8px;display:none;max-width:320px;z-index:999;
+      font-size:13px;box-shadow:0 0 20px var(--green-glow);
+    }
+
+    /* ---- Terminal panel ---- */
+    #terminalPanel{display:none}
+    .term-window{
+      background:#010b05;border:1px solid var(--border-bright);border-radius:10px;
+      overflow:hidden;box-shadow:0 0 30px rgba(0,255,120,0.08);
+    }
+    .term-titlebar{
+      display:flex;align-items:center;gap:8px;padding:10px 14px;
+      background:#02170c;border-bottom:1px solid var(--border);
+      font-size:12px;color:var(--muted);letter-spacing:1px;
+    }
+    .term-dot{width:10px;height:10px;border-radius:50%;background:var(--border-bright);opacity:0.6}
+    #termOutput{
+      height:420px;overflow-y:auto;padding:14px;font-size:13px;line-height:1.6;
+    }
+    #termOutput div{white-space:pre-wrap;word-break:break-word}
+    .term-line-ok{color:var(--green)}
+    .term-line-err{color:var(--red)}
+    .term-line-info{color:var(--green-dim)}
+    .term-line-echo{color:#5fe38a}
+    .term-inputrow{
+      display:flex;align-items:center;gap:8px;padding:10px 14px;
+      border-top:1px solid var(--border);background:#01130a;
+    }
+    .term-prompt{color:var(--green);font-weight:700;white-space:nowrap;font-size:13px}
+    #termInput{
+      flex:1;background:transparent;border:none;margin:0;padding:4px 0;
+      color:var(--green);font-size:13px;caret-color:var(--green);
+    }
+    #termInput:focus{outline:none;box-shadow:none}
+
+    @media (max-width:900px){
+      .layout{grid-template-columns:1fr}
+      .col-status{position:static}
+    }
   </style>
 </head>
 <body>
+  <div class="topbar">
+    <div class="brand">
+      <h1>&gt; BLACKVAULT_</h1>
+      <p class="subtitle">Encrypted file vault with real OTP, real automatic threat detection, and real backup-on-attack. Switch between GUI and terminal below -- both talk to the exact same backend.</p>
+    </div>
+    <div class="mode-toggle" role="group" aria-label="Interface mode">
+      <button id="modeGuiBtn" class="active">GUI MODE</button>
+      <button id="modeTermBtn">&gt;_ TERMINAL</button>
+    </div>
+  </div>
+
   <div class="layout">
     <div class="col-actions">
-      <div>
-        <h1>BlackVault</h1>
-        <p class="subtitle">Encrypted file vault with real OTP, real automatic threat detection, and real backup-on-attack. Every action below shows real, visible results -- check the toast (bottom-right) and Response panel if unsure what happened.</p>
+
+      <!-- ================= GUI PANEL ================= -->
+      <div id="guiPanel">
+        <div class="card">
+          <p class="step">Step 1 -- once</p>
+          <h3>Setup Vault</h3>
+          <input id="setupPassword" type="password" placeholder="Master password (min 8 chars)">
+          <input id="setupEmail" type="email" placeholder="Your real recovery email">
+          <button id="btnSetup">Initialize</button>
+          <button class="secondary" id="btnTestEmail">Send Test Email (check .env config)</button>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <p class="step">Step 2</p>
+          <h3>Get a Real OTP</h3>
+          <p class="muted">Emails a fresh 6-digit code to your recovery email. Copy it from your inbox into the Lock form below.</p>
+          <input id="otpPassword" type="password" placeholder="Master password">
+          <button id="btnOtp">Send OTP to my Email</button>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <p class="step">Step 3</p>
+          <h3>Lock a File</h3>
+          <input id="fileInput" type="file">
+          <p id="fileNameShown" class="muted"></p>
+          <input id="password" type="password" placeholder="Master password">
+          <input id="otp" type="text" placeholder="OTP you received by email">
+          <button id="btnLock">Encrypt &amp; Lock</button>
+          <div id="encryptedLinkBox"></div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <p class="step">Step 4</p>
+          <h3>Unlock / Attack Simulation</h3>
+          <input id="vaultId" placeholder="Vault ID (auto-filled after lock)">
+          <input id="unlockPassword" type="password" placeholder="Try the master password (right or wrong)">
+          <button id="btnUnlock">Attempt Unlock</button>
+          <div id="decryptedLinkBox"></div>
+          <p class="muted">Try a WRONG password 2-3 times on the same Vault ID: 1st = rejected · 2nd = real fake decoy file · 3rd = real backup + real email.</p>
+          <button class="danger" id="btnDelete">Attempt Delete</button>
+          <p class="muted"><b>What this does:</b> simulates someone deleting the vault. Wrong password &rarr; nothing is really deleted, the same auto-backup pipeline runs instead. Correct password &rarr; real, permanent, owner-authorized delete.</p>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3>Response</h3>
+          <pre id="responseBox">(button results appear here)</pre>
+        </div>
       </div>
 
-      <div class="card">
-        <p class="step">Step 1 -- once</p>
-        <h3 style="margin-top:0">Setup Vault</h3>
-        <input id="setupPassword" type="password" placeholder="Master password (min 8 chars)">
-        <input id="setupEmail" type="email" placeholder="Your real recovery email">
-        <button id="btnSetup">Initialize</button>
-        <button class="secondary" id="btnTestEmail">Send Test Email (check .env config)</button>
+      <!-- ================= TERMINAL PANEL ================= -->
+      <div id="terminalPanel">
+        <div class="term-window">
+          <div class="term-titlebar">
+            <span class="term-dot"></span>
+            <span class="term-dot"></span>
+            <span class="term-dot"></span>
+            &nbsp;root@blackvault:~
+          </div>
+          <div id="termOutput"></div>
+          <div class="term-inputrow">
+            <span class="term-prompt" id="termPromptLabel">blackvault&gt;</span>
+            <input id="termInput" autocomplete="off" spellcheck="false" autofocus>
+          </div>
+        </div>
+        <input id="termFileInput" type="file" style="display:none">
       </div>
 
-      <div class="card">
-        <p class="step">Step 2</p>
-        <h3 style="margin-top:0">Get a Real OTP</h3>
-        <p class="muted">Emails a fresh 6-digit code to your recovery email. Copy it from your inbox into the Lock form below.</p>
-        <input id="otpPassword" type="password" placeholder="Master password">
-        <button id="btnOtp">Send OTP to my Email</button>
-      </div>
-
-      <div class="card">
-        <p class="step">Step 3</p>
-        <h3 style="margin-top:0">Lock a File</h3>
-        <input id="fileInput" type="file">
-        <p id="fileNameShown" class="muted"></p>
-        <input id="password" type="password" placeholder="Master password">
-        <input id="otp" type="text" placeholder="OTP you received by email">
-        <button id="btnLock">Encrypt & Lock</button>
-        <div id="encryptedLinkBox"></div>
-      </div>
-
-      <div class="card">
-        <p class="step">Step 4</p>
-        <h3 style="margin-top:0">Unlock / Attack Simulation</h3>
-        <input id="vaultId" placeholder="Vault ID (auto-filled after lock)">
-        <input id="unlockPassword" type="password" placeholder="Try the master password (right or wrong)">
-        <button id="btnUnlock">Attempt Unlock</button>
-        <div id="decryptedLinkBox"></div>
-        <p class="muted">Try a WRONG password 2-3 times on the same Vault ID: 1st = rejected · 2nd = real fake decoy file · 3rd = real backup + real email.</p>
-        <button class="danger" id="btnDelete">Attempt Delete</button>
-        <p class="muted"><b>What this does:</b> simulates someone deleting the vault. Wrong password → nothing is really deleted, the same auto-backup pipeline runs instead. Correct password → real, permanent, owner-authorized delete.</p>
-      </div>
-
-      <div class="card">
-        <h3 style="margin-top:0">Response</h3>
-        <pre id="responseBox">(button results appear here)</pre>
-      </div>
     </div>
 
     <div class="col-status">
       <div class="card">
-        <h3 style="margin-top:0">Status / Audit Log</h3>
-        <button onclick="refreshStatus()">Refresh</button>
-        <pre id="statusBox"></pre>
+        <h3>Status / Audit Log</h3>
+        <input id="statusPassword" type="password" placeholder="Master password">
+        <button id="btnStatus">View Status</button>
+        <pre id="statusBox">(enter master password and click View Status)</pre>
       </div>
     </div>
   </div>
 
   <div id="toast"></div>
   <script src="ui.js"></script>
+  <script src="terminal.js"></script>
 </body>
 </html>
