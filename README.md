@@ -26,14 +26,14 @@ If someone tries to wipe or delete a vault without the correct password, the enc
 
 | Feature | Description |
 |---|---|
-| 🔐 **Real encryption** | AES (via Fernet) with a key derived from your master password using PBKDF2-HMAC-SHA256 (200,000 iterations) |
-| 📧 **Real OTP / MFA** | A genuine, single-use, 5-minute one-time code emailed to you — required before any file can be locked |
-| 🎯 **Threat scoring** | Every failed unlock/delete attempt is tracked server-side and scored; nothing client-controlled can fake it |
-| 🍯 **Honeypot** | After repeated wrong passwords, a real (but fake) decoy file is generated and served to whoever's attacking |
-| ☁️ **Auto-migration on attack** | Once the threat score crosses a threshold, your real encrypted file is pushed to a private GitHub Gist and wiped locally before it can be destroyed |
-| ✅ **Integrity verification** | SHA-256 of the original file is checked on every unlock — you always know if the bytes match what you locked |
-| 📜 **Tamper-evident audit log** | Every event is stored in a hash-chained SQLite log (same principle as git commits / blockchains) — altering old entries breaks the chain |
-| 🖥️ **Two interfaces, one backend** | A full web GUI *and* an in-browser terminal (toggle between them on the same page), plus a standalone `cli.py` for pure bash usage |
+|  **Real encryption** | AES (via Fernet) with a key derived from your master password using PBKDF2-HMAC-SHA256 (200,000 iterations) |
+|  **Real OTP / MFA** | A genuine, single-use, 5-minute one-time code emailed to you — required before any file can be locked |
+|  **Threat scoring** | Every failed unlock/delete attempt is tracked server-side and scored; nothing client-controlled can fake it |
+|  **Honeypot** | After repeated wrong passwords, a real (but fake) decoy file is generated and served to whoever's attacking |
+|  **Auto-migration on attack** | Once the threat score crosses a threshold, your real encrypted file is pushed to a private GitHub Gist and wiped locally before it can be destroyed |
+|  **Integrity verification** | SHA-256 of the original file is checked on every unlock — you always know if the bytes match what you locked |
+|  **Tamper-evident audit log** | Every event is stored in a hash-chained SQLite log (same principle as git commits / blockchains) — altering old entries breaks the chain |
+|  **Two interfaces, one backend** | A full web GUI *and* an in-browser terminal (toggle between them on the same page), plus a standalone `cli.py` for pure bash usage |
 
 ---
 
@@ -89,31 +89,6 @@ Unlocking a migrated vault with the correct password fetches the ciphertext from
 
 ### Audit Log
 Every event (setup, lock, wrong password, honeypot served, migration, delete) is inserted into a SQLite table where each row's hash includes the previous row's hash. Tampering with any old entry breaks every hash after it, making tampering detectable. `/api/status` reports whether the chain is still intact.
-
----
-
-## Getting Started
-
-```bash
-git clone https://github.com/Krish033-source/BlackVault.git
-cd BlackVault
-pip install -r requirements.txt
-cp .env.example .env   # fill in your SMTP + GitHub token details
-python main.py
-```
-
-Then open `http://localhost:5000` in your browser.
-
-### Required environment variables (`.env`)
-
-| Variable | Purpose |
-|---|---|
-| `MAIL_SERVER`, `MAIL_PORT` | SMTP server for sending OTP / alert emails (default: Gmail) |
-| `MAIL_USERNAME`, `MAIL_PASSWORD` | Sender account — for Gmail, use an **App Password**, not your normal password |
-| `MAIL_DEFAULT_SENDER` | From-address shown on outgoing emails |
-| `GITHUB_TOKEN` | A GitHub personal access token with `gist` scope, for auto-backup on attack |
-| `PORT` | Port to run on (default `5000`) |
-| `FLASK_DEBUG` | Set to `1` only for local debugging — never in production |
 
 ---
 
@@ -192,4 +167,4 @@ This project was built as a learning/hackathon project to explore real encryptio
 
 ## License
 
-MIT — do whatever you want with it, just don't blame me if you lock yourself out. 😄
+MIT — do whatever you want with it, just don't blame me if you lock yourself out.
